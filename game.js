@@ -1,4 +1,5 @@
 let canvas = document.getElementById("space_canvas");
+// 캔버스의 크기 속성값을 클라이언트의 화면 크기와 같게 바꿔줌
 canvas.width = document.body.clientWidth;
 canvas.height = document.body.clientHeight;
 
@@ -13,17 +14,19 @@ myFont.load().then(function(font){
 // 게임의 프레임은 60fps.
 const FPS = 60;
 const MAP = new Image();
-const WIDTH = canvas.width;
-const HEIGHT = canvas.height;
+const WIDTH = document.body.clientWidth;
+const HEIGHT = document.body.clientHeight;
 // 플레이어 관련
 const PLAYERSPEED = 6; // 플레이어 이동 속도
 const FRICTION = 0.7; // 마찰력. 이 마찰력에 의해 방향키 입력을 떼었을 때 속도가 서서히 줄어든다.
+const PLAYER_RADIUS = 40;
 let direction; // 플레이어의 이미지 index를 저장.
 const STUN = new Image();
-// 플레이어 피격 관련
+// 플레이어 피격 및 상태 관련
 const PLAYER_EXPLODE_DUR = 0.4; // 플레이어의 특수 장애물 피격시 폭발 지속시간
 const PLAYER_STUN_DUR = 1; // 플레이어의 장애물 피격시 기절 지속시간
 const PLAYER_BLINK_DUR = 2.5; // 플레이어 부활시 깜박임(무적) 지속시간
+const PLAYER_FEVER_DUR = 10; // 플레이어 아이템 획득시 피버타임 지속시간. (피버타임 = 점수 두배로 획득)
 const PER_SEC = 0.1;
 var explode_1 = 20;
 var explode_2 = 13;
@@ -31,13 +34,13 @@ var explode_3 = 7;
 var explode_4 = 3;
 // 장애물 관련
 const ROIDS_NUM = 7; // starting number of Asteroids
-const ROIDS_SIZE = 90; // starting size of Asteroids in pixels
+const ROIDS_SIZE = 140; // starting size of Asteroids in pixels
 // const ROIDS_JAG = 0.3; // jaggedness of the asteroids (0 = none, 1 = lots)
 // const ROIDS_SPD = 50; // max starting speed of Asteroids in pixels per second.
 // const ROIDS_VERT = 10; // average number of vertices on each Asteroid
 const ROIDS_OF_ITEM_NUM = 5;
 // 골인지점 관련
-const GOAL_TURN_SPEED = 360; // 골인지점 스프라이트를 초당 360도씩 회전시킴.
+// const GOAL_TURN_SPEED = 360; // 골인지점 스프라이트를 초당 360도씩 회전시킴.
 const SHOW_BOUNDING = true; // 이 상수가 true면 피격 판정이 항시로 켜져있음.
 var size_switch = true; // true면 골인 지점의 크기가 증가, false면 크기가 감소.
 // 이동 관련
@@ -47,22 +50,24 @@ var leftPressed = false;
 var upPressed = false;
 var downPressed = false;
 // 아이템 상자
-var itemCode;
+var itemCode; // 아이템 코드
 var itemBox;
-var item_asset = ['https://cdn.discordapp.com/attachments/980090904394219562/1012619683339436042/item_asteroid.png',
-                'https://cdn.discordapp.com/attachments/980090904394219562/1012619683825995826/item_stun.png'
-                ];
+var item_asset = 'https://cdn.discordapp.com/attachments/980090904394219562/1020591795580706816/item_boxxx_2.png';
 var itemPressed = false;
+var item_array = [1, 1, 1, 1, 2, 2, 3, 3, 3, 3]; 
 // 게임 흐름 관련
 const COUNT_DUR_TIME = 3;
 const LETS_GO = 1;
 const ITEM_REGEN_TIME = 6;
+const GOAL_REGEN_TIME = 5;
 var count_time = Math.ceil(PER_SEC * FPS);
 var count_num = Math.ceil(COUNT_DUR_TIME / PER_SEC);
 var lego_time = Math.ceil(PER_SEC * FPS);
 var lego_num = Math.ceil(LETS_GO / PER_SEC);
 var item_gen_time = Math.ceil(PER_SEC * FPS);
 var item_gen_num = Math.ceil(ITEM_REGEN_TIME / PER_SEC);
+var goal_gen_time = 0;
+var goal_gen_num = -1;
 var is_counting;
 var gogogogo;
 var is_gaming;
@@ -169,6 +174,12 @@ function stunPlayer() // 플레이어가 일반 장애물에 피격당하면 기
     player_1.stunNum = Math.ceil(PLAYER_STUN_DUR / PER_SEC);
 }
 
+function feverPlayer()
+{
+    player_1.feverTime = Math.ceil(PER_SEC * FPS);
+    player_1.feverNum = Math.ceil(PLAYER_FEVER_DUR / PER_SEC);
+}
+
 function createAsteroidBelt() // 장애물 배열을 만드는 메서드
 {
     roids = [];
@@ -210,13 +221,12 @@ function field_draw()
     ctx.closePath();
 }
 
-    
-
 function update()
 {
     var blinkOn = player_1.blinkNum % 2 == 0; // 플레이어가 부활 시 blinkOn = true
     var exploding = player_1.explodeTime > 0; // 플레이어가 특수 장애물에 피격시 exploding = true.
     var stunning = player_1.stunNum > 0; // 플레이어가 장애물에 피격시 stunning = true.
+    var fevering = player_1.feverNum > 0;
 
     is_counting = count_num > 0;
     is_item_existing = item_gen_num <= 0; // 아이템 리젠 시간이 다 되면 true가 된다. 아이템이 존재하고 있다는 뜻.
@@ -435,17 +445,27 @@ function update()
                 createRoidOfItemBelt();
             }
 
+            if (player_1.itemPocket == 2)
+            {
+                stunPlayer();
+            }
+
+            if (player_1.itemPocket == 3)
+            {
+                feverPlayer();
+            }
+
             player_1.itemPocket = 0;
         }
 
         // draw item in itemPocket. 현재 소유한 아이템을 그립니다.
-        if (player_1.itemPocket == 1)
+        if (player_1.itemPocket != 0)
         {
             ctx.beginPath();
-            ctx.drawImage(player_1.itemImg, 25, 85);
+            ctx.drawImage(player_1.itemImg, 25, 120);
             ctx.closePath();
         }
-
+        
         // draw a Asteroids. 장애물을 그립니다.
         var x, y, radius, a, vert, offs;
         for (var i = 0; i < roids.length; i++) {
@@ -508,6 +528,39 @@ function update()
             }
         }
         
+        // handle goal gen count. 골인 지점을 일정 주기로 리젠시킵니다.
+        if (goal_gen_num > 0)
+        {
+            goal_gen_time--;
+
+            if (goal_gen_time == 0)
+            {
+                goal_gen_time = Math.ceil(PER_SEC * FPS);
+                goal_gen_num--;
+            }
+        }
+
+        if (goal_gen_num == 0)
+        {
+            while (true)
+            {
+                var w = Math.floor(Math.random() * ((WIDTH - PLAYER_RADIUS) - PLAYER_RADIUS) + PLAYER_RADIUS);
+                var h = Math.floor(Math.random() * ((HEIGHT - PLAYER_RADIUS) - PLAYER_RADIUS) + PLAYER_RADIUS);          
+    
+                if (w >= 10 && w < 110 && h >= 30 && h < 205)
+                {
+                    
+                }
+                else
+                {
+                    break;
+                }
+            }
+            goal = new newGoal(w, h);
+
+            goal_gen_num = -1; // goal_gen_num이 계속 0으로 유지되어 버리면.... 골인 지점이 계속 생성되어버림.....
+        }
+
         // handle item gen count. 아이템을 일정 주기로 리젠시킵니다.
         if (item_gen_num > 0)
         {
@@ -522,7 +575,8 @@ function update()
 
         if (item_gen_num == 0)
         {
-            itemCode = 1; // Math.floor(Math.random * (3 - 1) + 1);
+            var item_index = Math.floor(Math.random() * 10);
+            itemCode = item_array[item_index];
             itemBox = new newItem(itemCode);
 
             item_gen_num = -1; // item_gen_num이 계속 0으로 유지되어 버리면.... 아이템이 계속 생성이 되어버림......
@@ -553,18 +607,21 @@ function update()
         }
 
         // draw a goal. 골인지점을 그립니다.
-        ctx.beginPath();
-        ctx.fillStyle = "white";
-        ctx.strokeStyle = "gray";
-        ctx.lineWidth = 5;
-        // ctx.fillRect(goal.x - goal.radius, goal.y - goal.radius, goal.radius * 2, goal.radius * 2);
-        // ctx.strokeRect(goal.x - goal.radius, goal.y - goal.radius, goal.radius * 2, goal.radius * 2);
-        ctx.fillRect(goal.x - goal.radius, goal.y - goal.radius, goal.radius * 2, goal.radius * 2);
-        ctx.strokeRect(goal.x - goal.radius, goal.y - goal.radius, goal.radius * 2, goal.radius * 2);
-        ctx.closePath();
+        if (goal_gen_num == -1)
+        {
+            ctx.beginPath();
+            ctx.fillStyle = "white";
+            ctx.strokeStyle = "gray";
+            ctx.lineWidth = 5;
+            // ctx.fillRect(goal.x - goal.radius, goal.y - goal.radius, goal.radius * 2, goal.radius * 2);
+            // ctx.strokeRect(goal.x - goal.radius, goal.y - goal.radius, goal.radius * 2, goal.radius * 2);
+            ctx.fillRect(goal.x - goal.radius, goal.y - goal.radius, goal.radius * 2, goal.radius * 2);
+            ctx.strokeRect(goal.x - goal.radius, goal.y - goal.radius, goal.radius * 2, goal.radius * 2);
+            ctx.closePath();
+        }
 
         // 골인지점의 피격범위를 그립니다.
-        if (SHOW_BOUNDING) {
+        if (goal_gen_num == -1 && SHOW_BOUNDING) {
             ctx.beginPath();
             ctx.strokeStyle = "lime";
             ctx.lineWidth = 3;
@@ -724,10 +781,31 @@ function update()
         }
 
         // check for goal. 플레이어가 골인 지점에 닿았는지 검사.
-        if (distBetweenPoints(player_1.x, player_1.y, goal.x, goal.y) < goal.radius + (player_1.radius - 13)) {
-            goal.blink();
+        if (goal_gen_num == -1 && distBetweenPoints(player_1.x, player_1.y, goal.x, goal.y) < goal.radius + (player_1.radius - 13)) {
+            // goal.blink();
+            goal_gen_time = Math.ceil(PER_SEC * FPS);
+            goal_gen_num = Math.ceil(GOAL_REGEN_TIME / PER_SEC);
 
-            player_1.score++;
+            if (fevering)
+            {
+                player_1.score += 2;
+            }
+            else
+            {
+                player_1.score++;
+            }  
+        }
+
+        // handle player fever status. 플레이어의 피버상태 지속시간을 점차 감소.
+        if (fevering)
+        {
+            player_1.feverTime--;
+
+            if (player_1.feverTime == 0)
+            {
+                player_1.feverTime = Math.ceil(PER_SEC * FPS);
+                player_1.feverNum--;
+            }
         }
 
         // 폭발중, 기절중이 아닐때에만 플레이어가 움직이도록 설정
@@ -744,12 +822,9 @@ function update()
         {
             if (distBetweenPoints(player_1.x, player_1.y, itemBox.x, itemBox.y) < itemBox.radius + (player_1.radius - 13))
             {
-                if (itemBox.type == 1)
-                {
-                    player_1.itemPocket = itemBox.type;
-                }
+                player_1.itemPocket = itemBox.type;
 
-                player_1.itemImg.src = item_asset[player_1.itemPocket-1];
+                // player_1.itemImg.src = item_asset;
                 item_gen_time = Math.ceil(PER_SEC * FPS);
                 item_gen_num = Math.ceil(ITEM_REGEN_TIME / PER_SEC);
             }
@@ -787,18 +862,29 @@ function update()
     ctx.textAlign = 'left';
     ctx.fillStyle = "white";
     ctx.fillText('score : ' + player_1.score, 10, 30);
-    console.log("is_item_existing : " + is_item_existing);
-    console.log("player_1.itemPocket : " + player_1.itemPocket);
+
+    if (fevering)
+    {
+        ctx.fillStyle = 'white';
+        ctx.fillRect(10, 40, 170 * (0.01 * player_1.feverNum), 30);
+        ctx.font = '34px DungGeunMo';
+        ctx.textAlign = 'left';
+        ctx.fillStyle = "#CC33FF";
+        ctx.fillText('FEVERTIME!!', 10, 63);
+    }
     
     ctx.beginPath();
     ctx.font = '30px DungGeunMo';
     ctx.textAlign = 'left';
     ctx.fillStyle = "white";
-    ctx.fillText('ITEM', 25, 60);
+    ctx.fillText('ITEM', 25, 95);
     ctx.strokeStyle = "white";
     ctx.lineWidth = 5;
-    ctx.strokeRect(10, 70, 100, 100);
+    ctx.strokeRect(10, 105, 100, 100);
     ctx.closePath();
+
+    console.log("is_item_existing : " + is_item_existing);
+    console.log("player_1.itemPocket : " + player_1.itemPocket);
 }
 
 setInterval(update, 1000 / FPS);

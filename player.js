@@ -36,7 +36,7 @@ function player(nick, num)
         'https://cdn.discordapp.com/attachments/980090904394219562/1011166813284995123/roc_rightup.png' // rightup
     ];
 
-    this.radius = 40; // 반지름
+    this.radius = PLAYER_RADIUS; // 반지름
     this.color = "#FF00FF"; // 닉네임 색
     this.x = WIDTH / 2; // x 좌표
     this.y = HEIGHT - this.radius; // y 좌표
@@ -56,6 +56,10 @@ function player(nick, num)
     this.stunTime = 0;
     this.stunNum = 0;
 
+    this.feverTime = 0;
+    this.feverNum = 0;
+
     this.itemImg = new Image();
+    this.itemImg.src = item_asset;
     this.itemPocket = 0;
 }

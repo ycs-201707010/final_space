@@ -1,7 +1,7 @@
 function newAsteroid(x, y)
 {
     const ROIDS_JAG = Math.random(); // jaggedness of the asteroids (0 = none, 1 = lots)
-    const ROIDS_SPD = Math.floor(Math.random() * (50 - 25) + 25); // max starting speed of Asteroids in pixels per second.
+    const ROIDS_SPD = Math.floor(Math.random() * (80 - 45) + 45); // max starting speed of Asteroids in pixels per second.
     const ROIDS_VERT = Math.floor(Math.random() * (16 - 8) + 8); // average number of vertices on each Asteroid
 
     this.x = x;
